@@ -1,0 +1,523 @@
+.data
+	roles:		.space 80	# array de 20 * 4
+	coada: 		.space 80	# array de 20 * 4
+	v: 		.space 80	# array de 20 * 4
+	matrix:		.space 1600	# matrice de 20 * 20 * 4	
+	n: 		.space 4	# numarul de noduri
+	nr_muchii:	.space 4	# numarul de legaturi
+	nr_cerinta:	.space 4	# numarul cerintei
+	host1:		.space 4
+	host2:		.space 4
+	str1: .asciiz "host index "
+	str2: .asciiz "switch index "
+	str3: .asciiz "switch malitios index "
+	str4: .asciiz "controller index "
+	str_yes: .asciiz "Yes"
+	str_no: .asciiz "No"
+	ch1: .asciiz ": "
+	ch2: .asciiz "; "
+	strnl: .asciiz "\n"
+	str: .space 20
+	
+.text
+
+main:
+
+	li $v0, 5		# citim n, numarul de noduri
+	syscall
+	sw $v0, n
+
+	li $v0, 5		# citim nr_muchii/legaturi
+	syscall
+	sw $v0, nr_muchii
+
+	lw $t0, nr_muchii	# punem nr_muchii in $t0
+	lw $t6, n		# punem n in $t6
+	li $t1, 0		# pe post de i din for
+
+# urmeaza crearea matricei
+
+for_edges:
+
+	bge $t1, $t0, incepere_citire_array	# cat timp i < nr_muchii
+
+	li $v0, 5
+	syscall
+	move $t2, $v0				# $t2 este acum "left"
+
+	li $v0, 5				
+	syscall
+	move $t3, $v0				# $t3 este acum "right"
+
+	mul $t4, $t2, $t6			# $t4 = $t2 (left) * $t6 (n)
+	add $t4, $t4, $t3			# $t4 = $t4 + $t3 (right)
+	mul $t4, $t4, 4				# $t4 = $t4 * 4
+
+	li $t5, 1
+	sw $t5, matrix($t4)
+
+	mul $t4, $t3, $t6
+	add $t4, $t4, $t2
+	mul $t4, $t4, 4
+	sw $t5, matrix($t4)
+
+	addi $t1, 1
+	j for_edges				# i++
+
+# urmeaza citirea array-ului roles
+
+incepere_citire_array:
+
+			li $t1, 0	# pentru i
+			li $t2, 0	# pentru accesarea locatiilor de memorie
+
+		for_roles:
+
+			bge $t1, $t6, citire_nr_cerinta		# cat timp i < n
+
+			li $v0, 5
+			syscall
+			sw, $v0, roles($t2)			# citim roles[i]
+
+			addi $t1, 1	# i++
+			addi $t2, 4	# sare la urmatoarea locatie de memorie
+			j for_roles
+
+citire_nr_cerinta:
+
+		li $v0, 5
+		syscall
+		sw $v0, nr_cerinta
+		lw $t7, nr_cerinta
+
+		beq $t7, 1, cerinta1
+		beq $t7, 2, cerinta2
+		beq $t7, 3, cerinta3
+		
+
+
+cerinta1:
+
+	lw $t0, n
+	li $t1, 0	# pentru i
+	li $t2, 0	# pentru accesarea locatiilor de memorie din array
+
+	for_parcurgere_roles:
+
+			bge $t1, $t0, etexit
+			lw $t3, roles($t2)		# daca roles[$t2] == 3, atunci inseamna ca am gasit un switch malitios
+			beq $t3, 3, switch_malitios
+
+			addi $t1, 1
+			addi $t2, 4
+			j for_parcurgere_roles
+
+
+		switch_malitios:
+
+				la $a0, str3		# afisam " switch malitios index "
+				li $v0, 4
+				syscall
+
+				move $a0, $t1		# afisam index-ul
+				li $v0, 1
+				syscall
+
+				la $a0, ch1		# afisam ":"
+				li $v0, 4
+				syscall
+
+				mul $t4, $t1, $t0
+				mul $t4, $t4, 4
+
+				lw $t5, matrix($t4)
+
+				add $t6, $t1, 1
+				mul $t6, $t6, $t0
+				mul $t6, $t6, 4
+
+				
+		cautare_linie:	
+			# cautam in matrice pe linia corespunzatoare switch-ului malitios echipamentele cu care este conectat
+
+				bge $t4, $t6, cont_roles
+
+				beq $t5, 1, cautare_in_roles	# matrix($t4) == 1
+
+				addi $t4, 4
+				lw $t5, matrix($t4)
+				j cautare_linie
+
+		cautare_in_roles:
+			# identificam in roles tipul de echipament conectat cu switch-ul malitios
+
+				div $t4, $t4, 4
+				mul $t7, $t1, $t0
+				sub $t4, $t4, $t7
+				mul $t4, $t4, 4
+
+				lw $t7, roles($t4)
+
+				beq $t7, 1, afis_host
+				beq $t7, 2, afis_switch
+				beq $t7, 3, afis_switchm
+				beq $t7, 4, afis_controller
+
+
+					afis_host:
+
+						la $a0, str1		# afisam "host index "
+						li $v0, 4
+						syscall
+
+						div $t4, $t4, 4
+						move $a0, $t4		# afisam index-ul
+						li $v0, 1
+						syscall
+						
+
+						la $a0, ch2		# afisam ";"
+						li $v0, 4
+						syscall
+
+						j cont
+
+					afis_switch:
+
+						la $a0, str2		# afisam "switch index "
+						li $v0, 4
+						syscall
+
+						div $t4, $t4, 4
+						move $a0, $t4		# afisam index-ul
+						li $v0, 1
+						syscall
+						
+
+						la $a0, ch2		# afisam ";"
+						li $v0, 4
+						syscall
+
+						j cont
+
+					afis_switchm:
+
+						la $a0, str3		# afisam "switch malitios index "
+						li $v0, 4
+						syscall
+
+						div $t4, $t4, 4
+						move $a0, $t4		# afisam index-ul
+						li $v0, 1
+						syscall
+						
+
+						la $a0, ch2		# afisam ";"
+						li $v0, 4
+						syscall
+
+						j cont
+
+					afis_controller:
+
+						la $a0, str4		# afisam "controller index "
+						li $v0, 4
+						syscall
+
+						div $t4, $t4, 4
+						move $a0, $t4		# afisam index-ul
+						li $v0, 1
+						syscall
+						
+						la $a0, ch2		# afisam ";"
+						li $v0, 4
+						syscall
+
+						j cont
+
+				cont:
+
+					
+					mul $t7, $t1, $t0		# ne-am dus la urmatorul element 
+					add $t4, $t4, $t7		# de pe linia pe care cautam in
+					mul $t4, $t4, 4			# matrice
+					addi $t4, 4
+
+					lw $t5, matrix($t4)
+
+					j cautare_linie
+
+				cont_roles:
+
+					la $a0, strnl			# trecem pe urmatoarea linie
+					li $v0, 4
+					syscall
+
+					addi $t1, 1
+					addi $t2, 4
+					j for_parcurgere_roles
+
+
+cerinta2:
+
+	lw $t0, n
+	li $t1, 0		# st = 0
+	li $t2, 0		# dr = 0
+
+	li $t3, 0	
+	sw $t3, coada($t2)	# coada[dr] = 0
+	addi $t2, 4		# dr ++
+
+	li $t3, 1		# v[0] = 1
+	sw $t3, v($t1)
+
+		bfs:
+
+			beq $t1, $t2, aflare_nr		# while (st != dr)
+
+			lw $t3, coada($t1)		# i = coada[st]
+			addi $t1, 4			# st ++
+
+			mul $t3, $t3, 4
+			lw $t4, roles($t3)		# if roles[i] == 1, afisam host-ul
+			beq $t4, 1, afisare
+
+			div $t3, $t3, 4
+			li $t5, 0			# j = 0
+
+
+				while:
+
+					bge $t5, $t0, bfs
+
+					mul $t6, $t3, $t0
+					add $t6, $t6, $t5
+					mul $t6, $t6, 4
+
+					lw $t7, matrix($t6)	# if a[i][j] == 1
+					beq $t7, 1, verif
+
+					addi $t5, 1
+					j while
+
+						verif:
+
+							mul $t5, $t5, 4
+							lw $t4, v($t5)
+							beq $t4, 0, operatii	# if v[j] == 0
+							div $t5, $t5, 4
+							addi $t5, 1
+							j while
+								operatii:
+
+									div $t5, $t5, 4
+									sw $t5, coada($t2)	# coada[dr] = j
+									addi $t2, 4		# dr ++
+									mul $t5, $t5, 4
+
+									li $t4, 1
+									sw $t4, v($t5)		# v[j] = 1
+
+									div $t5, $t5, 4
+									addi $t5, 1		# j ++
+									j while
+
+						afisare:
+
+							la $a0, str1		# afisam "host index "
+							li $v0, 4
+							syscall
+
+							li $t4, 0		# roles[i] = 0
+							sw $t4, roles($t3)
+
+							div $t3, $t3, 4		# afisam index-ul host-ului gasit
+							move $a0, $t3
+							li $v0, 1
+							syscall
+
+							la $a0, ch2		# afisam "; "
+							li $v0, 4
+							syscall
+
+							li $t5, 0		# j = 0
+							j while
+# pentru a afla daca intre toate host-urile exista o conexiune am decis sa eliminam din array-ul roles fiecare host gasit in cadrul
+# algoritmului BFS prin atribuirea valorii 0 elementului din vector de pe pozitia corespunzatoare 
+# dupa executarea algoritmului BFS, aflam daca exista valori de 1 in array-ul roles
+# in caz afirmativ, inseamna nu exista o conexiune intre toate host-urile
+	aflare_nr:
+
+			lw $t0, n
+			li $t1, 0	# i
+			li $t2, 0	# pt mem
+			li $t3, 0	# pt numararea valorilor de 1 din roles
+
+		et:
+
+			bge $t1, $t0, afisare_mesaj
+
+			lw $t3, roles($t2)
+			beq $t3, 1, numarare
+			j cont_nr
+
+		numarare:
+
+			addi $t3, 1
+			j cont_nr
+
+		cont_nr:
+
+			addi $t1, 1
+			addi $t2, 4
+			j et
+
+	afisare_mesaj:
+
+		la $a0, strnl		# trecem pe urmatoarea linie
+		li $v0, 4
+		syscall
+
+		beq $t3, 0, afis_yes
+
+		la $a0, str_no		# afisam "No"
+		li $v0, 4
+		syscall
+		j etexit
+
+	afis_yes:
+
+		la $a0, str_yes		# afisam "Yes"
+		li $v0, 4
+		syscall
+		j etexit
+
+cerinta3:
+# aplicam algoritmul de BFS pornind de la host 1
+# daca identificam un switch malitios pe parcusul cautarii, trecem la urmatorul nod
+# daca la final v[host2] == 0, atunci drumul este nesigur si mesajul este codat
+
+	li $v0, 5		# citim host1
+	syscall
+	sw $v0, host1
+
+	li $v0, 5		# citim host2
+	syscall
+	sw $v0, host2
+
+	li $v0, 8		# citim mesajul primit 
+	la $a0, str
+	li $a1, 20
+	syscall
+
+		lw $t0, n
+		li $t1, 0	# st = 0
+		li $t2, 0	# dr = 0 
+
+		lw $t3, host1
+		sw $t3, coada($t2)
+		addi $t2, 4
+		mul $t3, $t3, 4
+		li $t4, 1
+		sw $t4, v($t3)
+
+
+		bfs1:
+
+			beq $t1, $t2, aflare_criptare
+
+			lw $t3, coada($t1)
+			addi $t1, 4
+			li $t5, 0		# j = 0
+
+			while1:
+
+					bge $t5, $t0, bfs1
+
+					mul $t6, $t3, $t0
+					add $t6, $t6, $t5
+					mul $t6, $t6, 4
+
+					lw $t7, matrix($t6)		# if a[i][j] == 1
+					beq $t7, 1, verif1
+
+					addi $t5, 1
+					j while1
+
+						verif1:
+
+							mul $t5, $t5, 4			# if v[j] == 0
+							lw $t4, v($t5)
+							beq $t4, 0, verif2
+							div $t5, $t5, 4
+							addi $t5, 1
+							j while1
+
+						verif2:
+
+							lw $t6, roles($t5)		# if roles[j] == 3
+							bne $t6, 3, operatii1
+							div $t5, $t5, 4
+							addi $t5, 1
+							j while1
+
+								operatii1:
+
+									div $t5, $t5, 4
+									sw $t5, coada($t2)	# coada[dr] = j
+									addi $t2, 4		# dr ++
+									mul $t5, $t5, 4
+
+									li $t4, 1
+									sw $t4, v($t5)		# v[j] = 1
+
+									div $t5, $t5, 4
+									addi $t5, 1		# j ++
+									j while1
+
+		aflare_criptare:
+
+			lw $t0, host2
+			mul $t0, $t0, 4	
+			lw $t1, v($t0)
+
+			beq $t1, 0, decriptare		# if v[host2] == 0
+			j afisare_mesaj1
+
+
+		decriptare:
+
+			li $t0, 0	# pentru accesarea locatiilor de memorie din string
+			li $t7, 97	# $t7 = 'a'
+
+			for_mesaj:
+
+				lb $t1, str($t0)
+				beq $t1, 0, afisare_mesaj1
+				addi $t1, -10
+
+				blt $t1, $t7, marire	# if $t1 < 'a'
+				sb $t1, str($t0)
+				addi $t0, 1
+				j for_mesaj
+
+		marire:
+# conform cifrului Caesar si exemplelor date, formula de criptare este str[i] = (str[i] - 10) mod 26
+# daca str[i] - 10 < 'a', atunci adunam 26 o singura data pentru ca atat este nevoie 
+			addi $t1, 26
+			sb $t1, str($t0)
+			addi $t0, 1
+			j for_mesaj
+
+		afisare_mesaj1:
+
+			la $a0, str		# afisam mesajul final
+			li $v0, 4
+			syscall
+			j etexit
+
+
+etexit:
+
+	li $v0, 10
+	syscall
